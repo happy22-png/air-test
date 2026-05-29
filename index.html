@@ -3,104 +3,108 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>제주 대기질 종합 분석 대시보드</title>
+    <title>엑셀 데이터 결합 대시보드</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-<body class="bg-slate-50 text-slate-800 font-sans">
-    <div class="max-w-6xl mx-auto px-4 py-8">
-        <header class="mb-8 text-center">
-            <h1 class="text-3xl font-extrabold text-slate-900 mb-2">제주 대기질 정밀 분석 시스템</h1>
-            <p class="text-slate-500">지역 및 물질별 다각도 비교 분석</p>
-        </header>
+<body class="bg-gray-100 p-6 font-sans">
+    <div class="max-w-5xl mx-auto bg-white p-8 rounded-lg shadow-md">
+        <h1 class="text-2xl font-bold mb-6 text-gray-800">엑셀 데이터 결합 대시보드</h1>
+        
+        <div id="dropZone" class="mb-4 border-4 border-dashed border-gray-300 rounded-lg p-10 text-center hover:border-blue-500 transition cursor-pointer">
+            <p class="text-gray-600 mb-2">파일을 이곳으로 드래그하거나</p>
+            <input type="file" id="fileInput" multiple accept=".xlsx, .xls, .csv" class="hidden">
+            <button onclick="document.getElementById('fileInput').click()" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition">파일 선택</button>
+        </div>
 
-        <div class="grid md:grid-cols-3 gap-6 mb-8">
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                <label class="block text-sm font-semibold text-slate-700 mb-2">오염물질</label>
-                <select id="pollutantSelect" class="w-full p-3 bg-slate-50 border rounded-lg">
-                    <option value="pm10">미세먼지 (PM10)</option>
-                    <option value="pm25">초미세먼지 (PM2.5)</option>
-                    <option value="no2">이산화질소 (NO2)</option>
-                </select>
+        <div id="progressArea" class="mb-6 hidden">
+            <div class="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+                <div id="progressBar" class="bg-blue-600 h-4 w-0 transition-all duration-300"></div>
             </div>
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                <label class="block text-sm font-semibold text-slate-700 mb-2">연도</label>
-                <select id="yearSelect" class="w-full p-3 bg-slate-50 border rounded-lg">
-                    <option value="0">2022</option>
-                    <option value="1">2023</option>
-                    <option value="2">2024</option>
-                </select>
-            </div>
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                <label class="block text-sm font-semibold text-slate-700 mb-2">지역 (최대 3개)</label>
-                <select id="regionSelect" multiple class="w-full p-3 bg-slate-50 border rounded-lg h-24">
-                    <!-- JavaScript로 생성 -->
-                </select>
+            <p id="progressText" class="text-xs text-gray-500 mt-2 text-right">0%</p>
+        </div>
+
+        <div id="fileListArea" class="mb-6 bg-gray-50 p-4 rounded-lg hidden">
+            <h3 class="font-semibold text-gray-700 mb-2">선택된 파일 목록:</h3>
+            <ul id="fileList" class="list-disc list-inside text-sm text-gray-600"></ul>
+            <div class="mt-4 flex gap-2">
+                <button id="mergeBtn" class="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition">데이터 합치기</button>
+                <button id="downloadBtn" class="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition hidden">엑셀로 다운로드</button>
             </div>
         </div>
 
-        <div class="grid lg:grid-cols-2 gap-8 mb-8">
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                <h2 class="text-lg font-bold mb-4 text-blue-600">비교 분석 그래프</h2>
-                <div class="h-64"><canvas id="mainChart"></canvas></div>
-            </div>
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                <h2 class="text-lg font-bold mb-4 text-emerald-600">연도별 추이 분석 (통찰력)</h2>
-                <div class="h-64"><canvas id="insightChart"></canvas></div>
+        <div id="resultArea" class="hidden">
+            <h2 class="text-lg font-semibold mb-4">결합된 데이터 결과</h2>
+            <div class="overflow-x-auto border border-gray-200 rounded-lg">
+                <table id="resultTable" class="min-w-full divide-y divide-gray-200 text-sm">
+                    <thead class="bg-gray-100"></thead>
+                    <tbody class="bg-white divide-y divide-gray-200"></tbody>
+                </table>
             </div>
         </div>
     </div>
 
     <script>
-        const regions = ['강정동', '남원읍', '대정읍', '동홍동', '성산읍', '애월읍', '연동', '이도동', '조천읍', '한림읍', '화북동'];
-        const dataMap = {
-            'pm10': [26,28,22, 24,29,28, 27,30,24, 26,31,25, 28,32,26, 27.5,31,28, 29,34,29, 31,35,26, 28,35,27, 26,32,26, 27,30,27],
-            'pm25': [14,13,11, 12,13,13, 14,15,11, 11,13,13, 14,15,13, 15.5,12,11, 15,16,14, 16,14,13, 16,14,12, 16,14,14, 13,13,14],
-            'no2': [0.005,0.0057,0.0049, 0.004,0.0042,0.0051, 0.005,0.0056,0.0054, 0.007,0.0067,0.007, 0.005,0.0051,0.005, 0.0085,0.005,0.0052, 0.01,0.0097,0.0095, 0.01,0.0106,0.0101, 0.007,0.0066,0.0062, 0.007,0.007,0.007, 0.009,0.0091,0.0077]
+        let allData = [];
+        let fileNames = [];
+        
+        const processFiles = async (files) => {
+            if (files.length === 0) return;
+            document.getElementById('progressArea').classList.remove('hidden');
+            
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                if (fileNames.includes(file.name)) continue;
+                
+                fileNames.push(file.name);
+                const data = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+                        resolve(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]));
+                    };
+                    reader.readAsArrayBuffer(file);
+                });
+                allData.push(...data);
+                
+                const percent = Math.round(((i + 1) / files.length) * 100);
+                document.getElementById('progressBar').style.width = percent + '%';
+                document.getElementById('progressText').innerText = percent + '% 완료';
+            }
+            updateFileList();
         };
 
-        const regionSelect = document.getElementById('regionSelect');
-        regions.forEach((r, i) => {
-            const opt = document.createElement('option');
-            opt.value = i;
-            opt.textContent = r;
-            if(i < 3) opt.selected = true;
-            regionSelect.appendChild(opt);
+        const updateFileList = () => {
+            const list = document.getElementById('fileList');
+            list.innerHTML = fileNames.map(name => `<li class="break-all">${name}</li>`).join('');
+            document.getElementById('fileListArea').classList.remove('hidden');
+        };
+
+        document.getElementById('dropZone').addEventListener('drop', (e) => {
+            e.preventDefault();
+            processFiles(e.dataTransfer.files);
+        });
+        document.getElementById('dropZone').addEventListener('dragover', (e) => e.preventDefault());
+        document.getElementById('fileInput').addEventListener('change', (e) => processFiles(e.target.files));
+
+        document.getElementById('mergeBtn').addEventListener('click', () => {
+            if (allData.length === 0) return;
+            const head = document.querySelector('#resultTable thead');
+            const body = document.querySelector('#resultTable tbody');
+            const cols = Object.keys(allData[0]);
+            
+            head.innerHTML = `<tr>${cols.map(c => `<th class="px-6 py-3 text-left font-bold text-gray-700">${c}</th>`).join('')}</tr>`;
+            body.innerHTML = allData.map(row => `<tr>${cols.map(c => `<td class="px-6 py-4 text-gray-800">${row[c] !== undefined ? row[c] : ''}</td>`).join('')}</tr>`).join('');
+            document.getElementById('resultArea').classList.remove('hidden');
+            document.getElementById('downloadBtn').classList.remove('hidden');
         });
 
-        let mainChart, insightChart;
-        function update() {
-            const p = document.getElementById('pollutantSelect').value;
-            const y = parseInt(document.getElementById('yearSelect').value);
-            const selectedRegions = Array.from(regionSelect.selectedOptions).map(o => parseInt(o.value));
-            
-            const mainCtx = document.getElementById('mainChart').getContext('2d');
-            if(mainChart) mainChart.destroy();
-            mainChart = new Chart(mainCtx, {
-                type: 'bar',
-                data: {
-                    labels: selectedRegions.map(i => regions[i]),
-                    datasets: [{ label: '농도', data: selectedRegions.map(i => dataMap[p][i*3 + y]), backgroundColor: '#3b82f6' }]
-                }
-            });
-
-            const insightCtx = document.getElementById('insightChart').getContext('2d');
-            if(insightChart) insightChart.destroy();
-            insightChart = new Chart(insightCtx, {
-                type: 'line',
-                data: {
-                    labels: ['2022', '2023', '2024'],
-                    datasets: selectedRegions.map(i => ({
-                        label: regions[i],
-                        data: [dataMap[p][i*3], dataMap[p][i*3+1], dataMap[p][i*3+2]],
-                        tension: 0.3
-                    }))
-                }
-            });
-        }
-
-        document.querySelectorAll('select').forEach(s => s.addEventListener('change', update));
-        update();
+        document.getElementById('downloadBtn').addEventListener('click', () => {
+            const ws = XLSX.utils.json_to_sheet(allData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "CombinedData");
+            XLSX.writeFile(wb, "merged_data.xlsx");
+        });
     </script>
 </body>
 </html>
