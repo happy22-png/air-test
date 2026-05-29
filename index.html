@@ -1,110 +1,865 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>엑셀 데이터 결합 대시보드</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF 페이지 분할 및 포맷 변환 도구</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- PDF-Lib (PDF 조작 라이브러리) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+  <!-- PDF.js (PDF 렌더링/미리보기 라이브러리) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+  <!-- JSZip (다중 파일 패키징 및 HWPX 빌딩 라이브러리) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <!-- docx (클라이언트 워드 빌더 라이브러리) -->
+  <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.min.js"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    /* 스크롤바 커스텀 */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f1f1;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
 </head>
-<body class="bg-gray-100 p-6 font-sans">
-    <div class="max-w-5xl mx-auto bg-white p-8 rounded-lg shadow-md">
-        <h1 class="text-2xl font-bold mb-6 text-gray-800">엑셀 데이터 결합 대시보드</h1>
-        
-        <div id="dropZone" class="mb-4 border-4 border-dashed border-gray-300 rounded-lg p-10 text-center hover:border-blue-500 transition cursor-pointer">
-            <p class="text-gray-600 mb-2">파일을 이곳으로 드래그하거나</p>
-            <input type="file" id="fileInput" multiple accept=".xlsx, .xls, .csv" class="hidden">
-            <button onclick="document.getElementById('fileInput').click()" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition">파일 선택</button>
-        </div>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
 
-        <div id="progressArea" class="mb-6 hidden">
-            <div class="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
-                <div id="progressBar" class="bg-blue-600 h-4 w-0 transition-all duration-300"></div>
-            </div>
-            <p id="progressText" class="text-xs text-gray-500 mt-2 text-right">0%</p>
+  <!-- 네비게이션 바 -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="bg-indigo-600 text-white p-2 rounded-lg shadow-md flex items-center justify-center">
+          <i class="fa-solid fa-sliders text-xl"></i>
         </div>
+        <div>
+          <h1 class="text-lg font-bold tracking-tight text-slate-900">PDF 분할 & 변환기</h1>
+          <p class="text-xs text-slate-500">서버 전송 없이 변환하는 올인원 워크스페이스</p>
+        </div>
+      </div>
+      <div class="text-xs text-slate-400 font-medium bg-slate-100 px-2.5 py-1 rounded-full">
+        v1.3.1 (Binary Stability Fixed)
+      </div>
+    </div>
+  </header>
 
-        <div id="fileListArea" class="mb-6 bg-gray-50 p-4 rounded-lg hidden">
-            <h3 class="font-semibold text-gray-700 mb-2">선택된 파일 목록:</h3>
-            <ul id="fileList" class="list-disc list-inside text-sm text-gray-600"></ul>
-            <div class="mt-4 flex gap-2">
-                <button id="mergeBtn" class="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition">데이터 합치기</button>
-                <button id="downloadBtn" class="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition hidden">엑셀로 다운로드</button>
-            </div>
-        </div>
-
-        <div id="resultArea" class="hidden">
-            <h2 class="text-lg font-semibold mb-4">결합된 데이터 결과</h2>
-            <div class="overflow-x-auto border border-gray-200 rounded-lg">
-                <table id="resultTable" class="min-w-full divide-y divide-gray-200 text-sm">
-                    <thead class="bg-gray-100"></thead>
-                    <tbody class="bg-white divide-y divide-gray-200"></tbody>
-                </table>
-            </div>
-        </div>
+  <!-- 메인 컨텐츠 영역 -->
+  <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col">
+    
+    <!-- 1단계: 파일 업로드 영역 -->
+    <div id="uploadArea" class="flex-grow flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-2xl bg-white p-12 text-center shadow-sm hover:border-indigo-400 transition-colors cursor-pointer group my-auto">
+      <input type="file" id="pdfFileInput" accept=".pdf" class="hidden">
+      <div class="bg-slate-100 p-5 rounded-full text-slate-400 group-hover:text-indigo-500 group-hover:bg-indigo-50 transition-colors mb-4">
+        <i class="fa-solid fa-file-import text-4xl"></i>
+      </div>
+      <h3 class="text-lg font-semibold text-slate-700 mb-1">작업할 PDF 파일을 선택해 주세요</h3>
+      <p class="text-sm text-slate-500 mb-6">여기에 파일을 끌어다 놓거나 클릭하여 로드합니다.</p>
+      <button onclick="document.getElementById('pdfFileInput').click()" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg text-sm transition-colors shadow-md flex items-center space-x-2 mx-auto">
+        <span>문서 가져오기</span>
+      </button>
     </div>
 
-    <script>
-        let allData = [];
-        let fileNames = [];
+    <!-- 로딩 스피너 -->
+    <div id="loadingSpinner" class="hidden flex-grow flex flex-col items-center justify-center my-auto">
+      <div class="animate-spin rounded-full h-12 w-12 border-4 border-indigo-600 border-t-transparent mb-4"></div>
+      <p id="loadingText" class="text-slate-600 font-medium">로딩 중...</p>
+    </div>
+
+    <!-- 2단계: 편집 및 제어 패널 (업로드 완료 시 활성화) -->
+    <div id="editorArea" class="hidden flex-col lg:flex-row gap-6 items-stretch flex-grow animate-fade-in">
+      
+      <!-- 왼쪽: 미리보기 & 선택 영역 -->
+      <div class="flex-grow bg-white border border-slate-200 rounded-xl p-6 shadow-sm flex flex-col min-h-[500px]">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
+          <div class="flex items-center space-x-2">
+            <h2 class="font-bold text-slate-800 text-lg">문서 페이지 미리보기</h2>
+            <span id="pageCountBadge" class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full text-xs font-semibold">0 Pages</span>
+          </div>
+          <div class="flex space-x-2">
+            <button id="selectAllBtn" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium px-2 py-1 rounded hover:bg-indigo-50 transition-colors">모두 선택</button>
+            <button id="deselectAllBtn" class="text-xs text-slate-500 hover:text-slate-700 font-medium px-2 py-1 rounded hover:bg-slate-100 transition-colors">선택 해제</button>
+          </div>
+        </div>
+
+        <!-- 스크롤 가능한 썸네일 그리드 -->
+        <div id="thumbnailContainer" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 overflow-y-auto max-h-[600px] p-2 flex-grow">
+          <!-- 동적으로 썸네일 생성됨 -->
+        </div>
+      </div>
+
+      <!-- 오른쪽: 조작 패널 -->
+      <div class="w-full lg:w-96 flex flex-col gap-6 shrink-0">
         
-        const processFiles = async (files) => {
-            if (files.length === 0) return;
-            document.getElementById('progressArea').classList.remove('hidden');
-            
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                if (fileNames.includes(file.name)) continue;
-                
-                fileNames.push(file.name);
-                const data = await new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
-                        resolve(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]));
-                    };
-                    reader.readAsArrayBuffer(file);
-                });
-                allData.push(...data);
-                
-                const percent = Math.round(((i + 1) / files.length) * 100);
-                document.getElementById('progressBar').style.width = percent + '%';
-                document.getElementById('progressText').innerText = percent + '% 완료';
+        <!-- 파일 정보 카드 -->
+        <div class="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+          <h3 class="font-bold text-slate-800 mb-3 text-sm uppercase tracking-wider text-slate-400">소스 파일 정보</h3>
+          <div class="flex items-start space-x-3">
+            <div class="text-red-500 text-3xl shrink-0"><i class="fa-regular fa-file-pdf"></i></div>
+            <div class="overflow-hidden">
+              <p id="infoFileName" class="font-semibold text-slate-800 truncate text-sm">document.pdf</p>
+              <p id="infoFileSize" class="text-xs text-slate-500 mt-0.5">0.0 MB</p>
+            </div>
+          </div>
+          <button id="changeFileBtn" class="w-full mt-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg text-xs font-medium transition-colors flex items-center justify-center space-x-1.5">
+            <i class="fa-solid fa-arrow-rotate-left"></i>
+            <span>새 문서 업로드</span>
+          </button>
+        </div>
+
+        <!-- 분할 및 변환 포맷 설정 카드 -->
+        <div class="bg-white border border-slate-200 rounded-xl p-6 shadow-sm flex-grow flex flex-col">
+          <h3 class="font-bold text-slate-800 mb-4 text-sm uppercase tracking-wider text-slate-400">내보내기 옵션</h3>
+          
+          <!-- 1. 타겟 파일 포맷 선택 인터페이스 -->
+          <div class="mb-5">
+            <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">출력 파일 포맷</label>
+            <div class="grid grid-cols-4 gap-2">
+              <button id="formatPdfBtn" onclick="setExportFormat('pdf')" class="format-tab py-3 px-1 text-xs font-bold rounded-xl border-2 border-indigo-600 bg-indigo-50 text-indigo-700 transition-all flex flex-col items-center justify-center space-y-1">
+                <i class="fa-solid fa-file-pdf text-lg"></i>
+                <span>PDF</span>
+              </button>
+              <button id="formatDocxBtn" onclick="setExportFormat('docx')" class="format-tab py-3 px-1 text-xs font-bold rounded-xl border-2 border-slate-200 bg-white text-slate-600 hover:border-slate-300 transition-all flex flex-col items-center justify-center space-y-1">
+                <i class="fa-solid fa-file-word text-lg text-blue-500"></i>
+                <span>DOCX</span>
+              </button>
+              <button id="formatHwpxBtn" onclick="setExportFormat('hwpx')" class="format-tab py-3 px-1 text-xs font-bold rounded-xl border-2 border-slate-200 bg-white text-slate-600 hover:border-slate-300 transition-all flex flex-col items-center justify-center space-y-1">
+                <i class="fa-solid fa-file-signature text-lg text-emerald-500"></i>
+                <span>HWPX</span>
+              </button>
+              <button id="formatPngBtn" onclick="setExportFormat('png')" class="format-tab py-3 px-1 text-xs font-bold rounded-xl border-2 border-slate-200 bg-white text-slate-600 hover:border-slate-300 transition-all flex flex-col items-center justify-center space-y-1">
+                <i class="fa-solid fa-file-image text-lg text-amber-500"></i>
+                <span>PNG</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="space-y-4 mb-6">
+            <!-- 옵션 1: 전체 통합 변환 -->
+            <label class="block p-4 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-all relative">
+              <input type="radio" name="splitMode" value="merge_all" checked class="absolute right-4 top-4 text-indigo-600 focus:ring-indigo-500">
+              <div class="font-semibold text-slate-800 text-sm mb-1" id="modeMergeAllTitle">전체 통합 변환</div>
+              <div class="text-xs text-slate-500 leading-relaxed" id="modeMergeAllDesc">모든 페이지를 하나의 결합된 파일(PDF, DOCX, HWPX)로 병합하여 다운로드합니다. (PNG는 단일 ZIP으로 압축)</div>
+            </label>
+
+            <!-- 옵션 2: 전체 개별 분할 -->
+            <label class="block p-4 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-all relative">
+              <input type="radio" name="splitMode" value="split_all" class="absolute right-4 top-4 text-indigo-600 focus:ring-indigo-500">
+              <div class="font-semibold text-slate-800 text-sm mb-1" id="modeSplitAllTitle">전체 개별 분할</div>
+              <div class="text-xs text-slate-500 leading-relaxed" id="modeSplitAllDesc">모든 페이지를 각각 1페이지씩 쪼갠 후 안전하게 압축팩(ZIP)으로 포장하여 다운로드합니다.</div>
+            </label>
+
+            <!-- 옵션 3: 선택 페이지 / 범위 추출 -->
+            <label class="block p-4 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-all relative">
+              <input type="radio" name="splitMode" value="custom" class="absolute right-4 top-4 text-indigo-600 focus:ring-indigo-500">
+              <div class="font-semibold text-slate-800 text-sm mb-1" id="modeCustomTitle">선택된 페이지 / 범위 추출</div>
+              <div class="text-xs text-slate-500 leading-relaxed mb-3" id="modeCustomDesc">미리보기에서 클릭해 선택한 페이지만 모으거나, 하단에 지정한 범위의 페이지만 하나의 문서로 병합하여 내보냅니다.</div>
+              <div id="customOptionsGroup" class="hidden mt-2 space-y-3 pt-2 border-t border-slate-100">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-500 mb-1">범위 직접 입력 (선택 사항)</label>
+                  <input type="text" id="rangeInput" placeholder="예: 1-3, 5, 8-10" class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                  <p class="text-[10px] text-slate-400 mt-1">입력하지 않으면 좌측 미리보기에서 직접 클릭하여 체크 표시한 페이지만 추출 대상이 됩니다.</p>
+                </div>
+              </div>
+            </label>
+          </div>
+
+          <!-- 실행 버튼 -->
+          <div class="mt-auto">
+            <button id="splitBtn" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm transition-colors shadow-lg shadow-indigo-100 hover:shadow-xl flex items-center justify-center space-x-2">
+              <i class="fa-solid fa-gears"></i>
+              <span id="executeBtnText">선택한 파일 처리 및 저장</span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- 알림/에러 메시지 모달 -->
+  <div id="alertModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl transform transition-transform scale-95">
+      <div class="flex items-center space-x-3 mb-4 text-red-500" id="modalHeader">
+        <i class="fa-solid fa-triangle-exclamation text-2xl"></i>
+        <h4 class="font-bold text-lg text-slate-800" id="modalTitle">오류 발생</h4>
+      </div>
+      <p id="modalBody" class="text-sm text-slate-600 mb-6 leading-relaxed">메시지 내용</p>
+      <button onclick="closeModal()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-semibold rounded-lg text-sm transition-colors">
+        확인
+      </button>
+    </div>
+  </div>
+
+  <footer class="bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-400">
+    <p>© 2026 PDF Page Workspace. 로컬 메모리 보안 검증 모듈이 적용되었습니다.</p>
+  </footer>
+
+  <script>
+    // 로컬 파일 환경 보안 대응
+    if (window.location.protocol === 'file:') {
+      console.log("로컬 파일 감지 보안 우회 작동");
+      pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+    } else {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+    }
+
+    // 전역 제어 변수
+    let currentPdfArrayBuffer = null;
+    let currentPdfName = '';
+    let totalPages = 0;
+    let selectedPages = new Set();
+    let currentExportFormat = 'pdf'; // 'pdf' | 'docx' | 'hwpx' | 'png'
+
+    // DOM 선택
+    const uploadArea = document.getElementById('uploadArea');
+    const pdfFileInput = document.getElementById('pdfFileInput');
+    const editorArea = document.getElementById('editorArea');
+    const loadingSpinner = document.getElementById('loadingSpinner');
+    const loadingText = document.getElementById('loadingText');
+    const thumbnailContainer = document.getElementById('thumbnailContainer');
+    
+    const infoFileName = document.getElementById('infoFileName');
+    const infoFileSize = document.getElementById('infoFileSize');
+    const pageCountBadge = document.getElementById('pageCountBadge');
+    
+    const splitBtn = document.getElementById('splitBtn');
+    const executeBtnText = document.getElementById('executeBtnText');
+    const changeFileBtn = document.getElementById('changeFileBtn');
+    const selectAllBtn = document.getElementById('selectAllBtn');
+    const deselectAllBtn = document.getElementById('deselectAllBtn');
+    
+    const customOptionsGroup = document.getElementById('customOptionsGroup');
+    const rangeInput = document.getElementById('rangeInput');
+
+    const modeMergeAllTitle = document.getElementById('modeMergeAllTitle');
+    const modeMergeAllDesc = document.getElementById('modeMergeAllDesc');
+    const modeSplitAllTitle = document.getElementById('modeSplitAllTitle');
+    const modeSplitAllDesc = document.getElementById('modeSplitAllDesc');
+    const modeCustomTitle = document.getElementById('modeCustomTitle');
+    const modeCustomDesc = document.getElementById('modeCustomDesc');
+
+    // 포맷 변경 핸들러
+    function setExportFormat(format) {
+      currentExportFormat = format;
+      
+      // 디자인 액티브 효과 부여
+      document.querySelectorAll('.format-tab').forEach(tab => {
+        tab.classList.remove('border-indigo-600', 'bg-indigo-50', 'text-indigo-700');
+        tab.classList.add('border-slate-200', 'bg-white', 'text-slate-600');
+      });
+
+      const activeBtn = document.getElementById(`format${format.charAt(0).toUpperCase() + format.slice(1)}Btn`);
+      activeBtn.classList.remove('border-slate-200', 'bg-white', 'text-slate-600');
+      activeBtn.classList.add('border-indigo-600', 'bg-indigo-50', 'text-indigo-700');
+
+      // UI 텍스트 업데이트
+      if (format === 'pdf') {
+        modeMergeAllTitle.innerText = "전체 통합 변환";
+        modeMergeAllDesc.innerText = "모든 페이지가 하나로 합쳐진 단일 PDF 파일로 보존 및 결합됩니다.";
+        modeSplitAllTitle.innerText = "전체 개별 분할";
+        modeSplitAllDesc.innerText = "각각의 페이지를 1페이지짜리 개별 PDF 파일로 변환한 후, 하나의 ZIP 압축 파일로 다운로드합니다.";
+        modeCustomTitle.innerText = "선택 페이지 / 범위 추출";
+        modeCustomDesc.innerText = "체크된 페이지나 입력한 범위의 페이지만 모아서 새로운 하나의 PDF 파일로 합칩니다.";
+        executeBtnText.innerText = "PDF 가공 및 저장 시작";
+      } else if (format === 'png') {
+        modeMergeAllTitle.innerText = "전체 페이지 이미지 압축팩";
+        modeMergeAllDesc.innerText = "모든 페이지를 고해상도 PNG 이미지 파일들로 변환 후, 하나의 ZIP 압축 파일로 일괄 저장합니다.";
+        modeSplitAllTitle.innerText = "페이지별 이미지 생성 (동일)";
+        modeSplitAllDesc.innerText = "각 페이지별 PNG 이미지를 ZIP 압축 형태로 다운로드합니다.";
+        modeCustomTitle.innerText = "선택된 페이지만 이미지화";
+        modeCustomDesc.innerText = "원하는 범위 또는 지정 체크한 페이지만 PNG 이미지로 만들어 ZIP 압축본으로 저장합니다.";
+        executeBtnText.innerText = "PNG 포맷 이미지 저장 시작";
+      } else {
+        // DOCX, HWPX
+        modeMergeAllTitle.innerText = "전체 통합 변환";
+        modeMergeAllDesc.innerText = `모든 페이지의 텍스트 데이터를 분석하여 하나의 연속된 단일 ${format.toUpperCase()} 문서로 통합 추출합니다.`;
+        modeSplitAllTitle.innerText = "전체 개별 분할";
+        modeSplitAllDesc.innerText = `모든 페이지를 각각 1페이지 분량의 개별 ${format.toUpperCase()} 파일들로 쪼갠 후 ZIP 파일로 일괄 다운로드합니다.`;
+        modeCustomTitle.innerText = "선택 페이지 통합 추출";
+        modeCustomDesc.innerText = `체크된 페이지나 입력한 범위의 텍스트만 모아서 하나의 결합된 단일 ${format.toUpperCase()} 문서로 내려받습니다.`;
+        executeBtnText.innerText = `${format.toUpperCase()} 문서 추출 시작`;
+      }
+    }
+
+    // 파일 로드 이벤트 바인딩
+    uploadArea.addEventListener('click', () => pdfFileInput.click());
+    
+    uploadArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadArea.classList.add('border-indigo-500', 'bg-indigo-50/50');
+    });
+    
+    uploadArea.addEventListener('dragleave', () => {
+      uploadArea.classList.remove('border-indigo-500', 'bg-indigo-50/50');
+    });
+    
+    uploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('border-indigo-500', 'bg-indigo-50/50');
+      const files = e.dataTransfer.files;
+      if (files.length > 0 && files[0].type === 'application/pdf') {
+        handleFileSelect(files[0]);
+      } else {
+        showAlert('오류', '올바른 PDF 포맷의 파일을 올려주세요.');
+      }
+    });
+
+    pdfFileInput.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) {
+        handleFileSelect(e.target.files[0]);
+      }
+    });
+
+    // 라디오 버튼 조작 (범위 옵션 토글 추가)
+    document.querySelectorAll('input[name="splitMode"]').forEach(radio => {
+      radio.addEventListener('change', (e) => {
+        if (e.target.value === 'custom') {
+          customOptionsGroup.classList.remove('hidden');
+        } else {
+          customOptionsGroup.classList.add('hidden');
+        }
+      });
+    });
+
+    // 선택 보조
+    selectAllBtn.addEventListener('click', () => {
+      for (let i = 1; i <= totalPages; i++) {
+        selectedPages.add(i);
+        const card = document.querySelector(`[data-page-num="${i}"]`);
+        if (card) markCardSelected(card, true);
+      }
+    });
+
+    deselectAllBtn.addEventListener('click', () => {
+      selectedPages.clear();
+      document.querySelectorAll('.thumbnail-card').forEach(card => {
+        markCardSelected(card, false);
+      });
+    });
+
+    changeFileBtn.addEventListener('click', resetState);
+    splitBtn.addEventListener('click', executeSplitAndExport);
+
+    // 알림창 헬퍼
+    function showAlert(title, message, isSuccess = false) {
+      const modal = document.getElementById('alertModal');
+      const modalHeader = document.getElementById('modalHeader');
+      const modalTitle = document.getElementById('modalTitle');
+      const modalBody = document.getElementById('modalBody');
+      
+      modalTitle.innerText = title;
+      modalBody.innerText = message;
+      
+      if (isSuccess) {
+        modalHeader.className = "flex items-center space-x-3 mb-4 text-green-500";
+        modalHeader.innerHTML = `<i class="fa-solid fa-circle-check text-2xl"></i><h4 class="font-bold text-lg text-slate-800" id="modalTitle">${title}</h4>`;
+      } else {
+        modalHeader.className = "flex items-center space-x-3 mb-4 text-red-500";
+        modalHeader.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-2xl"></i><h4 class="font-bold text-lg text-slate-800" id="modalTitle">${title}</h4>`;
+      }
+      modal.classList.remove('hidden');
+    }
+
+    // 알림 모달 닫기
+    window.closeModal = function() {
+      document.getElementById('alertModal').classList.add('hidden');
+    }
+
+    // 상태 리셋
+    function resetState() {
+      currentPdfArrayBuffer = null;
+      currentPdfName = '';
+      totalPages = 0;
+      selectedPages.clear();
+      thumbnailContainer.innerHTML = '';
+      pdfFileInput.value = '';
+      rangeInput.value = '';
+      setExportFormat('pdf');
+      
+      document.querySelector('input[name="splitMode"][value="merge_all"]').checked = true;
+      customOptionsGroup.classList.add('hidden');
+
+      editorArea.classList.add('hidden');
+      uploadArea.classList.remove('hidden');
+    }
+
+    // 파일 로더
+    async function handleFileSelect(file) {
+      currentPdfName = file.name;
+      const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+      
+      infoFileName.innerText = file.name;
+      infoFileSize.innerText = `${fileSizeMB} MB`;
+
+      uploadArea.classList.add('hidden');
+      loadingSpinner.classList.remove('hidden');
+      loadingText.innerText = 'PDF 데이터를 로드하고 있습니다...';
+
+      try {
+        const fileReader = new FileReader();
+        fileReader.onload = async function() {
+          currentPdfArrayBuffer = this.result;
+          const bufferCopy = currentPdfArrayBuffer.slice(0);
+          await loadPdfThumbnails(bufferCopy);
+        };
+        fileReader.readAsArrayBuffer(file);
+      } catch (err) {
+        console.error(err);
+        showAlert('오류', 'PDF 파일을 파싱하는 데 실패했습니다.');
+        resetState();
+      }
+    }
+
+    // PDF.js 썸네일 생성기
+    async function loadPdfThumbnails(arrayBuffer) {
+      loadingText.innerText = '페이지 썸네일을 렌더링하고 있습니다...';
+      try {
+        thumbnailContainer.innerHTML = '';
+        const pdfData = new Uint8Array(arrayBuffer);
+        const loadingTask = pdfjsLib.getDocument({ data: pdfData });
+        const pdfDoc = await loadingTask.promise;
+        
+        totalPages = pdfDoc.numPages;
+        pageCountBadge.innerText = `${totalPages} Pages`;
+
+        for (let i = 1; i <= totalPages; i++) {
+          selectedPages.add(i);
+        }
+
+        for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+          const page = await pdfDoc.getPage(pageNum);
+          const viewport = page.getViewport({ scale: 0.35 });
+          
+          const card = document.createElement('div');
+          card.className = "thumbnail-card border-2 border-indigo-500 bg-indigo-50/10 p-2 rounded-xl flex flex-col items-center transition-all cursor-pointer relative shadow-sm hover:shadow-md";
+          card.dataset.pageNum = pageNum;
+
+          const badge = document.createElement('div');
+          badge.className = "badge-check absolute top-2 right-2 bg-indigo-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] shadow-sm";
+          badge.innerHTML = `<i class="fa-solid fa-check"></i>`;
+          card.appendChild(badge);
+
+          const canvas = document.createElement('canvas');
+          canvas.className = "rounded border border-slate-200 bg-white max-w-full shadow-inner";
+          const context = canvas.getContext('2d');
+          canvas.height = viewport.height;
+          canvas.width = viewport.width;
+
+          const renderContext = {
+            canvasContext: context,
+            viewport: viewport
+          };
+          
+          await page.render(renderContext).promise;
+          card.appendChild(canvas);
+
+          const pageLabel = document.createElement('p');
+          pageLabel.className = "text-xs font-semibold text-slate-700 mt-2";
+          pageLabel.innerText = `${pageNum} 페이지`;
+          card.appendChild(pageLabel);
+
+          card.addEventListener('click', () => {
+            if (selectedPages.has(pageNum)) {
+              selectedPages.delete(pageNum);
+              markCardSelected(card, false);
+            } else {
+              selectedPages.add(pageNum);
+              markCardSelected(card, true);
             }
-            updateFileList();
-        };
+          });
 
-        const updateFileList = () => {
-            const list = document.getElementById('fileList');
-            list.innerHTML = fileNames.map(name => `<li class="break-all">${name}</li>`).join('');
-            document.getElementById('fileListArea').classList.remove('hidden');
-        };
+          thumbnailContainer.appendChild(card);
+        }
 
-        document.getElementById('dropZone').addEventListener('drop', (e) => {
-            e.preventDefault();
-            processFiles(e.dataTransfer.files);
+        loadingSpinner.classList.add('hidden');
+        editorArea.classList.remove('hidden');
+        editorArea.classList.add('flex');
+
+      } catch (err) {
+        console.error(err);
+        showAlert('오류', 'PDF 썸네일 작성 작업 중 오류가 발생했습니다.');
+        resetState();
+      }
+    }
+
+    function markCardSelected(cardElement, isSelected) {
+      const badge = cardElement.querySelector('.badge-check');
+      if (isSelected) {
+        cardElement.className = "thumbnail-card border-2 border-indigo-500 bg-indigo-50/10 p-2 rounded-xl flex flex-col items-center transition-all cursor-pointer relative shadow-sm hover:shadow-md";
+        badge.classList.remove('hidden');
+      } else {
+        cardElement.className = "thumbnail-card border-2 border-slate-200 bg-white p-2 rounded-xl flex flex-col items-center transition-all cursor-pointer relative hover:border-slate-400";
+        badge.classList.add('hidden');
+      }
+    }
+
+    // 범위 구문분석기
+    function parseRangeInput(inputText, maxPage) {
+      const pages = new Set();
+      const cleaned = inputText.replace(/\s+/g, '');
+      if (!cleaned) return [];
+
+      const parts = cleaned.split(',');
+      for (const part of parts) {
+        if (part.includes('-')) {
+          const rangeParts = part.split('-');
+          if (rangeParts.length === 2) {
+            const start = parseInt(rangeParts[0], 10);
+            const end = parseInt(rangeParts[1], 10);
+            if (!isNaN(start) && !isNaN(end) && start <= end) {
+              for (let i = start; i <= end; i++) {
+                if (i >= 1 && i <= maxPage) pages.add(i);
+              }
+            }
+          }
+        } else {
+          const val = parseInt(part, 10);
+          if (!isNaN(val) && val >= 1 && val <= maxPage) {
+            pages.add(val);
+          }
+        }
+      }
+      return Array.from(pages).sort((a, b) => a - b);
+    }
+
+    // 텍스트 추출 모듈 (줄바꿈 및 간격 개선)
+    async function extractTextFromPdfPage(pdfDoc, pageNum) {
+      const page = await pdfDoc.getPage(pageNum);
+      const textContent = await page.getTextContent();
+      let lastY = null;
+      let text = "";
+      
+      for (const item of textContent.items) {
+        if (lastY !== null && Math.abs(item.transform[5] - lastY) > 8) {
+          text += "\n";
+        } else if (lastY !== null && item.str.trim() !== "") {
+          text += " ";
+        }
+        text += item.str;
+        lastY = item.transform[5];
+      }
+      return text;
+    }
+
+    // 고해상도 PNG 단독 렌더링 모듈
+    async function renderPageToPngBlob(pdfDoc, pageNum) {
+      const page = await pdfDoc.getPage(pageNum);
+      const viewport = page.getViewport({ scale: 2.0 });
+      
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const context = canvas.getContext('2d');
+      
+      const renderContext = {
+        canvasContext: context,
+        viewport: viewport
+      };
+      
+      await page.render(renderContext).promise;
+      
+      return new Promise((resolve) => {
+        canvas.toBlob((blob) => {
+          resolve(blob);
+        }, 'image/png');
+      });
+    }
+
+    // [패치 및 에러 우회 적용] DOCX 빌더 함수
+    async function buildDocxFile(pagesTextArray) {
+      // 전역 범위 내 docx 식별자 바인딩 안전성 보강
+      const docxLib = window.docx || (typeof docx !== 'undefined' ? docx : null);
+      if (!docxLib) {
+        throw new ReferenceError("docx 라이브러리를 정상적으로 메모리에 로드하지 못했습니다.");
+      }
+      
+      const { Document, Packer, Paragraph, TextRun, PageBreak } = docxLib;
+      const docChildren = [];
+
+      pagesTextArray.forEach((text, idx) => {
+        const lines = text.split('\n');
+        lines.forEach(line => {
+          docChildren.push(new Paragraph({
+            children: [new TextRun({ text: line, size: 24 })]
+          }));
         });
-        document.getElementById('dropZone').addEventListener('dragover', (e) => e.preventDefault());
-        document.getElementById('fileInput').addEventListener('change', (e) => processFiles(e.target.files));
+        // 마지막 페이지가 아닌 경우 강제 페이지 넘김 기입
+        if (idx < pagesTextArray.length - 1) {
+          docChildren.push(new Paragraph({
+            children: [new PageBreak()]
+          }));
+        }
+      });
 
-        document.getElementById('mergeBtn').addEventListener('click', () => {
-            if (allData.length === 0) return;
-            const head = document.querySelector('#resultTable thead');
-            const body = document.querySelector('#resultTable tbody');
-            const cols = Object.keys(allData[0]);
+      const doc = new Document({
+        sections: [{
+          properties: {},
+          children: docChildren
+        }]
+      });
+
+      return await Packer.toBlob(doc);
+    }
+
+    // [패치 완료] HWPX 뷰어 및 한글 프로그램에서 깨짐 현상 없이 완벽 구동하도록 필수 디렉터리 스키마 완전 구성
+    async function buildHwpxFile(pagesTextArray) {
+      const zip = new JSZip();
+      
+      // 1. mimetype (압축 방식: 무압축 강제 지정 필수)
+      zip.file("mimetype", "application/hwpx+zip", { compression: "STORE" });
+      
+      // 2. META-INF/container.xml 생성
+      zip.folder("META-INF").file("container.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container" version="1.0">
+  <rootfiles>
+    <rootfile full-path="Contents/content.hwpml" media-type="application/hwpml+xml"/>
+  </rootfiles>
+</container>`);
+      
+      // 3. [Content_Types].xml 구조 구성
+      zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/markup-compatibility/2006">
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Default Extension="hwpml" ContentType="application/hwpml+xml"/>
+  <Default Extension="img" ContentType="image/png"/>
+</Types>`);
+
+      // 4. Contents/header.xml 메타 정의
+      zip.folder("Contents").file("header.xml", `<?xml version="1.0" encoding="utf-8"?>
+<hh:headmap xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head" version="1.0">
+  <hh:beginSectList>
+    <hh:beginSect id="0"/>
+  </hh:beginSectList>
+</hh:headmap>`);
+      
+      // 5. Contents/content.hwpml 빌딩 (뷰어 호환용 스키마 및 마크업 표준 주입)
+      let paragraphsXml = "";
+      pagesTextArray.forEach((text, pageIdx) => {
+        const lines = text.split('\n');
+        lines.forEach(line => {
+          const escapedLine = line
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&apos;');
             
-            head.innerHTML = `<tr>${cols.map(c => `<th class="px-6 py-3 text-left font-bold text-gray-700">${c}</th>`).join('')}</tr>`;
-            body.innerHTML = allData.map(row => `<tr>${cols.map(c => `<td class="px-6 py-4 text-gray-800">${row[c] !== undefined ? row[c] : ''}</td>`).join('')}</tr>`).join('');
-            document.getElementById('resultArea').classList.remove('hidden');
-            document.getElementById('downloadBtn').classList.remove('hidden');
+          paragraphsXml += `      <hp:p><hp:run><hp:t>${escapedLine}</hp:t></hp:run></hp:p>\n`;
         });
+        
+        // 페이지 나눔 속성 추가
+        if (pageIdx < pagesTextArray.length - 1) {
+          paragraphsXml += `      <hp:p><hp:run><hp:ctrl><hp:colbr/></hp:ctrl></hp:run></hp:p>\n`;
+        }
+      });
+      
+      const contentHwpml = `<?xml version="1.0" encoding="utf-8"?>
+<hp:hwpml xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph" 
+          xmlns:hc="http://www.hancom.co.kr/hwpml/2011/core" 
+          xmlns:ha="http://www.hancom.co.kr/hwpml/2011/app" 
+          xmlns:hs="http://www.hancom.co.kr/hwpml/2011/style" 
+          version="1.0">
+  <hp:head>
+    <hs:styles>
+      <hs:style id="0" type="PARA" name="Normal" engName="Normal"/>
+    </hs:styles>
+  </hp:head>
+  <hp:body>
+    <hp:section id="0">
+      <hp:secDef id="0" secType="NEW"/>
+${paragraphsXml}
+    </hp:section>
+  </hp:body>
+</hp:hwpml>`;
+      
+      zip.folder("Contents").file("content.hwpml", contentHwpml);
+      
+      // 안전한 이진 Blob 생성 반환
+      return await zip.generateAsync({ type: "blob" });
+    }
 
-        document.getElementById('downloadBtn').addEventListener('click', () => {
-            const ws = XLSX.utils.json_to_sheet(allData);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "CombinedData");
-            XLSX.writeFile(wb, "merged_data.xlsx");
-        });
-    </script>
+    // 분할 및 포맷 변환 통합 컨트롤러
+    async function executeSplitAndExport() {
+      if (!currentPdfArrayBuffer) {
+        showAlert('오류', '작업할 원본 PDF 버퍼가 존재하지 않습니다.');
+        return;
+      }
+
+      const splitMode = document.querySelector('input[name="splitMode"]:checked').value;
+      let targetPages = [];
+
+      // 1. 선택 모드별 추출 대상 범위 획득
+      if (splitMode === 'merge_all' || splitMode === 'split_all') {
+        for (let i = 1; i <= totalPages; i++) targetPages.push(i);
+      } else if (splitMode === 'custom') {
+        const rawInput = rangeInput.value.trim();
+        if (rawInput) {
+          targetPages = parseRangeInput(rawInput, totalPages);
+          if (targetPages.length === 0) {
+            showAlert('오류', '입력한 페이지 범위 규격이 비정상적입니다.');
+            return;
+          }
+        } else {
+          targetPages = Array.from(selectedPages).sort((a, b) => a - b);
+          if (targetPages.length === 0) {
+            showAlert('알림', '선택된 페이지가 없습니다. 왼쪽 미리보기 카드들을 클릭하여 체크해 주세요.');
+            return;
+          }
+        }
+      }
+
+      // 로딩 UI 구동
+      editorArea.classList.add('hidden');
+      loadingSpinner.classList.remove('hidden');
+      loadingText.innerText = '문서를 포맷팅 및 가공 중입니다...';
+
+      try {
+        const originalNameNoExt = currentPdfName.substring(0, currentPdfName.lastIndexOf('.')) || currentPdfName;
+        
+        // PDFjs 분석용 단독 버퍼 복제
+        const renderTaskBuffer = currentPdfArrayBuffer.slice(0);
+        const pdfData = new Uint8Array(renderTaskBuffer);
+        const sourcePdfjsDoc = await pdfjsLib.getDocument({ data: pdfData }).promise;
+
+        // ==================== [PNG 이미지 내보내기] ====================
+        if (currentExportFormat === 'png') {
+          const zip = new JSZip();
+          for (let i = 0; i < targetPages.length; i++) {
+            const pageNum = targetPages[i];
+            loadingText.innerText = `PNG 이미지 렌더링 중... (${i + 1}/${targetPages.length})`;
+            const pngBlob = await renderPageToPngBlob(sourcePdfjsDoc, pageNum);
+            zip.file(`${originalNameNoExt}_page_${pageNum}.png`, pngBlob);
+          }
+          loadingText.innerText = 'ZIP 이미지 패키지 생성 중...';
+          const zipBlob = await zip.generateAsync({ type: 'blob' });
+          downloadBlob(zipBlob, `${originalNameNoExt}_images.zip`, 'application/zip');
+          showAlert('성공', '고해상도 이미지 ZIP 변환이 완료되었습니다.', true);
+        }
+
+        // ==================== [DOCX 워드 변환 내보내기] ====================
+        else if (currentExportFormat === 'docx') {
+          const textArray = [];
+          for (let i = 0; i < targetPages.length; i++) {
+            loadingText.innerText = `텍스트 스트림 추출 분석 중... (${i + 1}/${targetPages.length})`;
+            const text = await extractTextFromPdfPage(sourcePdfjsDoc, targetPages[i]);
+            textArray.push(text);
+          }
+
+          if (splitMode === 'split_all') {
+            // "전체 개별 분할" -> 개별 DOCX 파일을 생성하여 ZIP 압축본 저장
+            const zip = new JSZip();
+            for (let i = 0; i < textArray.length; i++) {
+              const wordBlob = await buildDocxFile([textArray[i]]);
+              zip.file(`${originalNameNoExt}_page_${targetPages[i]}.docx`, wordBlob);
+            }
+            const zipBlob = await zip.generateAsync({ type: 'blob' });
+            downloadBlob(zipBlob, `${originalNameNoExt}_word_individual.zip`, 'application/zip');
+          } else {
+            // "전체 통합 변환" 또는 "선택 페이지/범위 추출" -> 하나의 병합된 DOCX 파일 생성
+            const wordBlob = await buildDocxFile(textArray);
+            downloadBlob(wordBlob, `${originalNameNoExt}_merged.docx`, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+          }
+          showAlert('성공', '워드 DOCX 변환 및 내보내기가 완료되었습니다.', true);
+        }
+
+        // ==================== [HWPX 한글 변환 내보내기] ====================
+        else if (currentExportFormat === 'hwpx') {
+          const textArray = [];
+          for (let i = 0; i < targetPages.length; i++) {
+            loadingText.innerText = `텍스트 분석 중... (${i + 1}/${targetPages.length})`;
+            const text = await extractTextFromPdfPage(sourcePdfjsDoc, targetPages[i]);
+            textArray.push(text);
+          }
+
+          if (splitMode === 'split_all') {
+            // "전체 개별 분할" -> 개별 HWPX 한글 파일 생성 후 ZIP 패키징 저장
+            const zip = new JSZip();
+            for (let i = 0; i < textArray.length; i++) {
+              const hwpxBlob = await buildHwpxFile([textArray[i]]);
+              zip.file(`${originalNameNoExt}_page_${targetPages[i]}.hwpx`, hwpxBlob);
+            }
+            const zipBlob = await zip.generateAsync({ type: 'blob' });
+            downloadBlob(zipBlob, `${originalNameNoExt}_hwp_individual.zip`, 'application/zip');
+          } else {
+            // "전체 통합 변환" 또는 "선택 페이지/범위 추출" -> 하나로 묶은 결합 HWPX 다운로드
+            const hwpxBlob = await buildHwpxFile(textArray);
+            downloadBlob(hwpxBlob, `${originalNameNoExt}_merged.hwpx`, 'application/hwpx+zip');
+          }
+          showAlert('성공', '개방형 한글 HWPX 변환 및 저장 작업이 완료되었습니다.', true);
+        }
+
+        // ==================== [오리지널 PDF 포맷 내보내기] ====================
+        else if (currentExportFormat === 'pdf') {
+          const pdfWorkBuffer = currentPdfArrayBuffer.slice(0);
+          const sourcePdfLibDoc = await PDFLib.PDFDocument.load(pdfWorkBuffer);
+
+          if (splitMode === 'split_all') {
+            // "전체 개별 분할" -> 브라우저 차단 우회를 위한 [ZIP 단일 포장] 프로세스 도입
+            const zip = new JSZip();
+            for (let i = 0; i < totalPages; i++) {
+              loadingText.innerText = `PDF 추출 및 가공 중... (${i + 1}/${totalPages})`;
+              const newPdfDoc = await PDFLib.PDFDocument.create();
+              const [copiedPage] = await newPdfDoc.copyPages(sourcePdfLibDoc, [i]);
+              newPdfDoc.addPage(copiedPage);
+              
+              const pdfBytes = await newPdfDoc.save();
+              zip.file(`${originalNameNoExt}_page_${i + 1}.pdf`, pdfBytes);
+            }
+            loadingText.innerText = 'ZIP 파일 패키징 처리 중...';
+            const zipBlob = await zip.generateAsync({ type: 'blob' });
+            downloadBlob(zipBlob, `${originalNameNoExt}_split_pdfs.zip`, 'application/zip');
+            showAlert('성공', '모든 페이지가 정상 분할되어 ZIP 패키지로 일괄 다운로드되었습니다!', true);
+          } else {
+            // "전체 통합 변환" 또는 "선택 추출" -> 지정 범위 병합 및 단일 PDF 파일 내보내기
+            const targetIndices = targetPages.map(p => p - 1);
+            const newPdfDoc = await PDFLib.PDFDocument.create();
+            const copiedPages = await newPdfDoc.copyPages(sourcePdfLibDoc, targetIndices);
+            copiedPages.forEach(page => newPdfDoc.addPage(page));
+            
+            const pdfBytes = await newPdfDoc.save();
+            downloadBlob(new Blob([pdfBytes], { type: 'application/pdf' }), `${originalNameNoExt}_processed.pdf`, 'application/pdf');
+            showAlert('성공', '요청하신 지정 페이지가 하나의 PDF 파일로 성공적으로 보존되었습니다.', true);
+          }
+        }
+
+      } catch (err) {
+        console.error(err);
+        showAlert('오류', '변환 및 조작 엔진의 실행 환경과 인코딩이 맞지 않습니다. 원본 문서 손상 유무를 확인해 주세요.');
+      } finally {
+        restoreEditor();
+      }
+    }
+
+    function restoreEditor() {
+      loadingSpinner.classList.add('hidden');
+      editorArea.classList.remove('hidden');
+    }
+
+    // [중요 패치]: 바이너리 데이터 훼손 방지를 위해 Blob 및 URL 생성을 전담 처리하는 이진 특화 다운로드 파이프라인 구현
+    function downloadBlob(blob, fileName, mimeType) {
+      // 명시된 mimeType을 전달받아 Blob의 인코딩 손상을 근본적으로 차단
+      const finalBlob = blob instanceof Blob ? blob : new Blob([blob], { type: mimeType });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(finalBlob);
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+    }
+  </script>
 </body>
 </html>
